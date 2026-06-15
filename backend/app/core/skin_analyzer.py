@@ -100,10 +100,10 @@ class SkinAnalyzer:
             
             # Class-specific baseline confidence thresholds
             baseline_thresholds = {
-                "acne": 0.18,
-                "dark_spot": 0.22,
-                "redness": 0.25,
-                "dryness_patch": 0.20
+                "acne": 0.08,
+                "dark_spot": 0.10,
+                "redness": 0.12,
+                "dryness_patch": 0.10
             }
 
             # Region-specific modifiers

@@ -268,13 +268,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     continue
 
-                # Real-time WebSocket only needs face tracking landmarks.
-                # Heavy skin condition YOLO ONNX inference is deferred to the "Capture & Analyze" REST endpoint
-                # to guarantee 30+ FPS live tracking.
-                regions_serialized = {}
-                overall_severity = 0.0
+                # Run YOLOv8 blemish detection on the cropped regions in real-time
+                region_analyses = skin_analyzer.analyze_regions(regions)
+                overall_severity = calculate_overall_severity(region_analyses)
+                
+                regions_serialized = {
+                    k: v.model_dump() for k, v in region_analyses.items()
+                }
+                
                 elapsed = (time.time() - start_time) * 1000
-                logger.info(f"Frame processed: Face detected. Latency: {elapsed:.1f}ms (Overall Severity: {overall_severity * 100}%)")
+                logger.info(f"Frame processed: Face detected. Latency: {elapsed:.1f}ms (Overall Severity: {overall_severity * 100:.1f}%)")
 
                 await websocket.send_json({
                     "face_detected": True,
