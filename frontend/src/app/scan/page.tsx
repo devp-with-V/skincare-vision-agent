@@ -6,6 +6,7 @@ import { Camera, Sparkles, RefreshCw, AlertTriangle, CheckCircle, Zap } from 'lu
 import FaceMeshOverlay from '../../components/FaceMeshOverlay';
 import SeverityGauge from '../../components/SeverityGauge';
 import RegionBreakdown from '../../components/RegionBreakdown';
+import AnalysisReport, { SkincareRecommendations } from '../../components/AnalysisReport';
 import { SkinWebSocketClient, scanImage, AnalysisResult } from '../../lib/api';
 
 const WEBCAM_WIDTH = 640;
@@ -33,6 +34,9 @@ export default function ScanPage() {
   // Interactive UI state
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+
+  // Recommendations state
+  const [recommendations, setRecommendations] = useState<SkincareRecommendations | null>(null);
 
   // WebSocket frame sending loop
   useEffect(() => {
@@ -103,6 +107,7 @@ export default function ScanPage() {
 
     setIsScanning(false); // Stop real-time ws scan
     setErrorMsg(null);
+    setRecommendations(null); // Clear previous recommendations
     setScanProgress(10);
 
     const interval = setInterval(() => {
@@ -115,6 +120,7 @@ export default function ScanPage() {
       setScanProgress(100);
       
       setAnalysis(response.analysis);
+      setRecommendations(response.recommendations);
 
       setTimeout(() => {
         setScanProgress(0);
@@ -271,6 +277,12 @@ export default function ScanPage() {
         </div>
 
       </div>
+
+      {recommendations && (
+        <div className="w-full max-w-6xl mt-8">
+          <AnalysisReport recommendations={recommendations} />
+        </div>
+      )}
 
       {/* CSS Animation Keyframes for scanner effect */}
       <style jsx global>{`

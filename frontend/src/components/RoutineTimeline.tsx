@@ -5,7 +5,7 @@ import { Sun, Moon } from 'lucide-react';
 import ProductCard from './ProductCard';
 
 interface SkincareStep {
-  step_number: int;
+  step_number: number;
   time_of_day: string;
   step_name: string;
   ingredients: string[];

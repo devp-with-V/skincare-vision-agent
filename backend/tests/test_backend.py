@@ -90,4 +90,51 @@ def test_analyze_route():
     assert data["analysis"]["face_detected"] is False  # Dummy image has no face
     assert data["recommendations"] is None
 
+def test_compile_user_prompt():
+    from app.agent.prompts import compile_user_prompt
+    regions_data = {
+        "forehead": {"severity_score": 0.15, "dominant_concern": "dryness_patch", "detections": [{"class_name": "dryness"}]},
+        "left_cheek": {"severity_score": 0.35, "dominant_concern": "acne", "detections": [{"class_name": "acne"}]}
+    }
+    prompt = compile_user_prompt(0.25, regions_data)
+    assert "Overall Skin Severity Rating: 25%" in prompt
+    assert "- FOREHEAD:" in prompt
+    assert "Severity Score: 15%" in prompt
+    assert "Dominant Concern: dryness patch" in prompt
+    assert "Localized Blemishes: 1 count" in prompt
+
+@pytest.mark.anyio
+async def test_skin_agent_claude_api_parsing():
+    from app.agent.skin_agent import SkinAgent
+    from unittest.mock import AsyncMock
+    import os
+    
+    # Temporarily set ANTHROPIC_API_KEY to test the api client path
+    os.environ["ANTHROPIC_API_KEY"] = "fake_key"
+    agent = SkinAgent()
+    
+    # Mock the client message return value
+    mock_message = AsyncMock()
+    mock_message.content = [
+        AsyncMock(text='{"condition_name": "Test Acne", "condition_desc": "Desc", "overall_summary": "Summary", "dermatologist_flag": false, "dermatologist_reason": null, "disclaimer": "Disclaimer", "routine": [], "lifestyle_tips": []}')
+    ]
+    agent.client = AsyncMock()
+    agent.client.messages.create = AsyncMock(return_value=mock_message)
+    
+    res = await agent.generate_analysis(0.2, {})
+    assert res["condition_name"] == "Test Acne"
+    assert res["dermatologist_flag"] is False
+    
+    # Test wrapping in markdown block
+    mock_message.content = [
+        AsyncMock(text='```json\n{"condition_name": "Test Markdown", "condition_desc": "Desc", "overall_summary": "Summary", "dermatologist_flag": true, "dermatologist_reason": "Severe", "disclaimer": "Disclaimer", "routine": [], "lifestyle_tips": []}\n```')
+    ]
+    res = await agent.generate_analysis(0.6, {})
+    assert res["condition_name"] == "Test Markdown"
+    assert res["dermatologist_flag"] is True
+    
+    # Cleanup environment
+    del os.environ["ANTHROPIC_API_KEY"]
+
+
 

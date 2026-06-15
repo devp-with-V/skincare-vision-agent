@@ -34,15 +34,18 @@ export interface ScanResponse {
 // This allows local network devices (like mobile phones) to connect to the backend server automatically.
 const getBackendUrls = () => {
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
+    let hostname = window.location.hostname;
+    if (hostname === 'localhost') {
+      hostname = '127.0.0.1';
+    }
     return {
       api: `http://${hostname}:8000`,
       ws: `ws://${hostname}:8000`
     };
   }
   return {
-    api: 'http://localhost:8000',
-    ws: 'ws://localhost:8000'
+    api: 'http://127.0.0.1:8000',
+    ws: 'ws://127.0.0.1:8000'
   };
 };
 
@@ -51,7 +54,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || urls.api;
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || urls.ws;
 
 export async function scanImage(base64Image: string, userId?: string): Promise<ScanResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/scan`, {
+  const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

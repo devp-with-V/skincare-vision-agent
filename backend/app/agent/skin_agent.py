@@ -205,7 +205,6 @@ class SkinAgent:
                 {
                     "step_number": 1,
                     "time_of_day": "AM",
-                    "time_of_day": "AM",
                     "step_name": "Cleanse",
                     "ingredients": ["Centella Asiatica (Cica) Gel Cleanser"],
                     "instructions": "Use an ultra-gentle, pH-balanced soothing gel wash."
