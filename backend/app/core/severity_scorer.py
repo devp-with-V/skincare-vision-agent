@@ -9,14 +9,15 @@ def calculate_region_severity(detections: List[Detection]) -> float:
     if not detections:
         return 0.0
         
-    count = len(detections)
+    # Weight count by the confidence of each detection to prevent low-confidence noise
+    # from blowing up the severity score when the threshold is very low (e.g. 0.01).
+    weighted_count = sum(d.confidence for d in detections)
     
     # Highest confidence detection
     max_conf = max(d.confidence for d in detections)
     
     # Score calculation: base weight per detection + max confidence weight
-    # 3 detections of high confidence should yield around 0.6 - 0.7 severity
-    raw_score = (count * 0.12) + (max_conf * 0.3)
+    raw_score = (weighted_count * 0.12) + (max_conf * 0.3)
     
     # Cap between 0.0 and 1.0 and round
     return min(1.0, round(raw_score, 2))
