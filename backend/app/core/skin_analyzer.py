@@ -85,6 +85,7 @@ class SkinAnalyzer:
             input_data = img_rgb.astype(np.float32) / 255.0
             input_data = input_data.transpose(2, 0, 1) # HWC -> CHW
             input_data = np.expand_dims(input_data, axis=0) # CHW -> BCHW
+            input_data = np.ascontiguousarray(input_data)
 
             # Run ONNX inference
             outputs = self.session.run(None, {self.input_name: input_data})

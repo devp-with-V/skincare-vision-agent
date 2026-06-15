@@ -152,8 +152,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
 
             except Exception as e:
-                logger.error(f"WebSocket frame processing error: {str(e)}")
-                await websocket.send_json({"error": "Error processing frame"})
+                logger.exception("WebSocket frame processing error during streaming:")
+                try:
+                    await websocket.send_json({"error": f"Error processing frame: {str(e)}"})
+                except Exception:
+                    pass
 
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed by client")

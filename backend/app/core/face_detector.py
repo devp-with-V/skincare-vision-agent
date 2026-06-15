@@ -73,7 +73,7 @@ class FaceDetector:
         h, w, _ = img.shape
 
         # 2. Convert to RGB for MediaPipe and wrap in mp.Image
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img_rgb = np.ascontiguousarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
 
         # 3. Detect Face Landmarks
