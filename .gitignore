@@ -1,0 +1,25 @@
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/build
+frontend/node_modules/
+frontend/.env*.local
+
+# Python/Pip
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/env/
+backend/.env
+
+# ML/Weights
+ml/models/*.pt
+ml/models/*.onnx
+ml/data/acne04/
+ml/data/isic/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+Desktop.ini
