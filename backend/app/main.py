@@ -9,6 +9,7 @@ from PIL import Image
 from app.models.schemas import ScanRequest, ScanResponse, AnalysisResult, LandmarkPoint
 from app.core.face_detector import FaceDetector
 from app.core.skin_analyzer import SkinAnalyzer
+from app.core.severity_scorer import calculate_overall_severity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -77,7 +78,7 @@ async def scan_image(request: ScanRequest):
         region_analyses = skin_analyzer.analyze_regions(regions)
 
         # 4. Calculate overall severity
-        overall_severity = skin_analyzer.calculate_overall_severity(region_analyses)
+        overall_severity = calculate_overall_severity(region_analyses)
 
         return ScanResponse(
             analysis=AnalysisResult(
@@ -135,7 +136,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Quick analysis for real-time overlay
                 region_analyses = skin_analyzer.analyze_regions(regions)
-                overall_severity = skin_analyzer.calculate_overall_severity(region_analyses)
+                overall_severity = calculate_overall_severity(region_analyses)
 
                 # Send back the results
                 # Convert region_analyses schemas to dicts

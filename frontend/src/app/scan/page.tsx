@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { Camera, Sparkles, RefreshCw, AlertTriangle, CheckCircle, Zap } from 'lucide-react';
 import FaceMeshOverlay from '../../components/FaceMeshOverlay';
-import { SkinWebSocketClient, scanImage, AnalysisResult, RegionAnalysis } from '../../lib/api';
+import SeverityGauge from '../../components/SeverityGauge';
+import RegionBreakdown from '../../components/RegionBreakdown';
+import { SkinWebSocketClient, scanImage, AnalysisResult } from '../../lib/api';
 
 const WEBCAM_WIDTH = 640;
 const WEBCAM_HEIGHT = 480;
@@ -44,7 +46,7 @@ export default function ScanPage() {
             wsClientRef.current?.sendFrame(imageSrc);
           }
         }
-      }, 150); // ~6-7 FPS is perfect for tracking without flooding the server
+      }, 150);
     }
 
     return () => {
@@ -56,7 +58,6 @@ export default function ScanPage() {
   useEffect(() => {
     const ws = new SkinWebSocketClient(
       (data) => {
-        // Handle incoming frame analysis results
         if (data.error) {
           setErrorMsg(data.error);
           return;
@@ -126,13 +127,6 @@ export default function ScanPage() {
   };
 
   const activeRegionName = hoveredRegion || selectedRegion;
-  const activeRegionData = activeRegionName ? analysis.regions[activeRegionName] : null;
-
-  const getSeverityLabel = (score: number) => {
-    if (score < 0.2) return { text: 'Clear / Healthy', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' };
-    if (score < 0.5) return { text: 'Mild Concerns', color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' };
-    return { text: 'Needs Attention', color: 'text-red-400 border-red-500/30 bg-red-500/10' };
-  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-6 md:p-12 selection:bg-cyan-500/30">
@@ -255,146 +249,24 @@ export default function ScanPage() {
               General Analysis
             </h2>
             
-            <div className="flex items-center gap-6">
-              {/* Severity Ring */}
-              <div className="relative w-24 h-24 flex items-center justify-center rounded-full border border-slate-800 bg-slate-950/50">
-                <svg className="absolute w-full h-full -rotate-90">
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="rgba(30, 41, 59, 0.5)"
-                    strokeWidth="8"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="url(#severityGrad)"
-                    strokeWidth="8"
-                    strokeDasharray={2 * Math.PI * 40}
-                    strokeDashoffset={2 * Math.PI * 40 * (1 - (analysis.face_detected ? analysis.overall_severity : 0))}
-                    strokeLinecap="round"
-                    fill="transparent"
-                  />
-                  <defs>
-                    <linearGradient id="severityGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#22d3ee" />
-                      <stop offset="50%" stopColor="#10b981" />
-                      <stop offset="100%" stopColor="#f59e0b" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="flex flex-col items-center justify-center">
-                  <span className="text-2xl font-black text-white">
-                    {analysis.face_detected ? Math.round(analysis.overall_severity * 100) : 0}%
-                  </span>
-                  <span className="text-[9px] uppercase tracking-widest text-slate-500 font-semibold">Severity</span>
-                </div>
-              </div>
-
-              {/* Quick Details */}
-              <div className="flex-1 flex flex-col gap-2">
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Health Status</span>
-                  <div className={`mt-1 text-xs font-semibold px-2.5 py-1 rounded-md border inline-block ${
-                    analysis.face_detected 
-                      ? getSeverityLabel(analysis.overall_severity).color 
-                      : 'text-slate-400 border-slate-800 bg-slate-900/30'
-                  }`}>
-                    {analysis.face_detected ? getSeverityLabel(analysis.overall_severity).text : 'No face detected'}
-                  </div>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Hover or select specific face zones on the scanner canvas to view regional analysis reports.
-                </p>
-              </div>
-            </div>
+            <SeverityGauge 
+              severity={analysis.overall_severity} 
+              faceDetected={analysis.face_detected} 
+            />
           </div>
 
           {/* Regional Breakdown Dashboard */}
           <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-md flex-1">
             <h2 className="text-xl font-bold mb-4">Face Regions</h2>
             
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {['forehead', 'left_cheek', 'right_cheek', 'nose', 'chin'].map((reg) => {
-                const isHovered = activeRegionName === reg;
-                const score = analysis.regions[reg]?.severity_score ?? 0;
-                
-                return (
-                  <button
-                    key={reg}
-                    onMouseEnter={() => setHoveredRegion(reg)}
-                    onMouseLeave={() => setHoveredRegion(null)}
-                    onClick={() => setSelectedRegion(selectedRegion === reg ? null : reg)}
-                    className={`flex flex-col items-start p-3 rounded-2xl border text-left transition-all ${
-                      isHovered || selectedRegion === reg
-                        ? 'bg-slate-800/80 border-cyan-500/50 shadow-md shadow-cyan-950/20' 
-                        : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-xs font-semibold text-slate-400 capitalize">{reg.replace('_', ' ')}</span>
-                    <div className="flex items-baseline gap-1.5 mt-1">
-                      <span className="text-lg font-bold text-slate-100">
-                        {analysis.face_detected ? Math.round(score * 100) : 0}%
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-semibold">severity</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Selected Region details */}
-            <div className="border-t border-slate-800/80 pt-6">
-              {activeRegionData ? (
-                <div className="animate-[fadeIn_0.2s_ease-out]">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base font-bold capitalize text-cyan-400">
-                      {activeRegionName?.replace('_', ' ')} Analysis
-                    </h3>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getSeverityLabel(activeRegionData.severity_score).color}`}>
-                      {getSeverityLabel(activeRegionData.severity_score).text}
-                    </span>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Dominant Concern</span>
-                      <p className="text-sm font-semibold text-slate-200 mt-0.5 capitalize">
-                        {activeRegionData.dominant_concern?.replace('_', ' ') || 'None Detected'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 mb-1.5 block">
-                        Detections ({activeRegionData.detections.length})
-                      </span>
-                      {activeRegionData.detections.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {activeRegionData.detections.map((det, i) => (
-                            <div key={i} className="text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl px-2.5 py-1.5 font-medium flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 bg-rose-400 rounded-full" />
-                              <span className="capitalize">{det.class_name.replace('_', ' ')}</span>
-                              <span className="opacity-60">{Math.round(det.confidence * 100)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500 italic">No localized lesions or blemishes detected.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-950/20 border border-dashed border-slate-800 rounded-2xl">
-                  <p className="text-xs text-slate-500 leading-relaxed max-w-[240px]">
-                    No face region selected. Hover over a region on the mesh overlay or click a card above to inspect findings.
-                  </p>
-                </div>
-              )}
-            </div>
+            <RegionBreakdown
+              regions={analysis.regions}
+              faceDetected={analysis.face_detected}
+              activeRegionName={activeRegionName}
+              selectedRegion={selectedRegion}
+              onHoverRegion={setHoveredRegion}
+              onSelectRegion={setSelectedRegion}
+            />
           </div>
         </div>
 
