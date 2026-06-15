@@ -58,6 +58,8 @@ export default function ScanPage() {
     };
   }, [isScanning, isWsConnected]);
 
+  const severityHistoryRef = useRef<number[]>([]);
+
   // Connect WebSocket on mount
   useEffect(() => {
     const ws = new SkinWebSocketClient(
@@ -66,11 +68,18 @@ export default function ScanPage() {
           setErrorMsg(data.error);
           return;
         }
+
+        // Apply moving average temporal filter over 5 frames
+        const rawSeverity = data.overall_severity || 0;
+        const history = [...severityHistoryRef.current, rawSeverity].slice(-5);
+        severityHistoryRef.current = history;
+        const smoothedSeverity = history.reduce((sum, val) => sum + val, 0) / history.length;
+
         setAnalysis({
           face_detected: data.face_detected,
           landmarks: data.landmarks || [],
           regions: data.regions || {},
-          overall_severity: data.overall_severity || 0
+          overall_severity: smoothedSeverity
         });
         setErrorMsg(null);
       },

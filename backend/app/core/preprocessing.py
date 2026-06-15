@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-def normalize_lighting(img: np.ndarray) -> np.ndarray:
+def normalize_lighting(img: np.ndarray, clip_limit=2.0) -> np.ndarray:
     """
     Normalizes lighting variance in skin crop using CLAHE on LAB color space.
     This maintains the chromaticity (color values) while equalizing the lightness.
@@ -14,7 +14,7 @@ def normalize_lighting(img: np.ndarray) -> np.ndarray:
     l, a, b = cv2.split(lab)
     
     # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
     cl = clahe.apply(l)
     
     # Merge channels and convert back to BGR
@@ -59,5 +59,13 @@ def correct_white_balance(img: np.ndarray) -> np.ndarray:
 def preprocess_skin_crop(img: np.ndarray) -> np.ndarray:
     """Full preprocessing pipeline for region images prior to model inference."""
     balanced = correct_white_balance(img)
-    normalized = normalize_lighting(balanced)
+    
+    # Calculate initial luminance to adjust CLAHE clipping limit
+    lab = cv2.cvtColor(balanced, cv2.COLOR_BGR2LAB)
+    mean_l = float(np.mean(lab[:, :, 0])) / 255.0
+    
+    # Darker images get less contrast amplification to prevent shadow noise artifacting
+    clip_limit = 1.3 if mean_l < 0.4 else 2.2
+    
+    normalized = normalize_lighting(balanced, clip_limit=clip_limit)
     return normalized

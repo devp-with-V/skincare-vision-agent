@@ -72,12 +72,15 @@ class SkinAgent:
         Generates realistic, tailored skin care routines based on scanning inputs.
         Used as a high-quality fallback when no Claude API key is supplied.
         """
-        # 1. Determine the primary concern
-        concerns = [data.get("dominant_concern") for data in regions_data.values() if data.get("dominant_concern")]
+        # 1. Determine the primary concern (the concern with the highest regional severity score)
         primary_concern = "general"
-        if concerns:
-            counts = {c: concerns.count(c) for c in set(concerns)}
-            primary_concern = max(counts, key=counts.get)
+        highest_score = -1.0
+        for data in regions_data.values():
+            concern = data.get("dominant_concern")
+            score = data.get("severity_score", 0.0)
+            if concern and score > highest_score:
+                highest_score = score
+                primary_concern = concern
             
         # Determine dermatologist referral
         needs_derm = overall_severity > 0.5

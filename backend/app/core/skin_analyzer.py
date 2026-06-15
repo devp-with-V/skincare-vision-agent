@@ -51,12 +51,16 @@ class SkinAnalyzer:
             if region_img is None or region_img.size == 0:
                 continue
 
+            # Calculate luminance of the color-corrected region to adjust confidence thresholds adaptively
+            lab = cv2.cvtColor(region_img, cv2.COLOR_BGR2LAB)
+            mean_luminance = float(np.mean(lab[:, :, 0])) / 255.0
+
             # 1. Preprocess skin crop (Gray World White Balance + CLAHE)
             preprocessed = preprocess_skin_crop(region_img)
 
             # 2. Run inference (ONNX or Mock)
             if self.session is not None:
-                detections = self._run_onnx_inference(preprocessed)
+                detections = self._run_onnx_inference(preprocessed, region_name, mean_luminance)
             else:
                 detections = self._get_mock_detections(region_name)
 
@@ -73,8 +77,8 @@ class SkinAnalyzer:
             
         return analysis
 
-    def _run_onnx_inference(self, img: np.ndarray, conf_threshold=0.15) -> List[Detection]:
-        """Runs the raw preprocessed image through the YOLOv8 ONNX session."""
+    def _run_onnx_inference(self, img: np.ndarray, region_name: str, mean_luminance: float) -> List[Detection]:
+        """Runs the raw preprocessed image through the YOLOv8 ONNX session using adaptive thresholds."""
         try:
             # Resize image to standard YOLOv8 input size (640x640)
             img_resized = cv2.resize(img, (640, 640))
@@ -91,9 +95,24 @@ class SkinAnalyzer:
             outputs = self.session.run(None, {self.input_name: input_data})
             output = outputs[0] # Shape: (1, 4 + num_classes, 8400) -> (1, 8, 8400)
             
-            # Post-processing: Filter predictions by confidence threshold
+            # Post-processing: Filter predictions by adaptive confidence thresholds
             predictions = np.squeeze(output).T # Shape: (8400, 8)
             
+            # Class-specific baseline confidence thresholds
+            baseline_thresholds = {
+                "acne": 0.18,
+                "dark_spot": 0.22,
+                "redness": 0.25,
+                "dryness_patch": 0.20
+            }
+
+            # Region-specific modifiers
+            region_modifiers = {
+                "nose": {"redness": 1.25, "dark_spot": 1.1},
+                "forehead": {"dryness_patch": 1.1, "redness": 1.1},
+                "chin": {"acne": 1.1}
+            }
+
             boxes = []
             confidences = []
             class_ids = []
@@ -102,8 +121,26 @@ class SkinAnalyzer:
                 scores = pred[4:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
+                class_name = self.classes[class_id]
                 
-                if confidence >= conf_threshold:
+                # Get baseline threshold
+                base_conf = baseline_thresholds.get(class_name, 0.15)
+                
+                # Apply regional modifier
+                region_mod = region_modifiers.get(region_name, {}).get(class_name, 1.0)
+                conf_thresh = base_conf * region_mod
+                
+                # Apply luminance modifier: if image is dark (< 0.4), scale up threshold to reduce shadow false positives
+                if mean_luminance < 0.4:
+                    shadow_factor = 1.0 + (0.4 - mean_luminance) * 0.8
+                    conf_thresh *= shadow_factor
+                # If image is very bright (> 0.75), scale down slightly to capture low-contrast washed-out spots
+                elif mean_luminance > 0.75:
+                    conf_thresh *= 0.9
+                    
+                conf_thresh = max(0.10, min(0.85, conf_thresh))
+                
+                if confidence >= conf_thresh:
                     xc, yc, w, h = pred[:4]
                     
                     # Convert center coords to min/max box coords (0.0 to 1.0)
@@ -125,7 +162,8 @@ class SkinAnalyzer:
                     int((x_max - x_min) * 640), int((y_max - y_min) * 640)
                 ])
                 
-            indices = cv2.dnn.NMSBoxes(pixel_boxes, confidences, conf_threshold, 0.4)
+            # Filter with NMS using IoU threshold of 0.45
+            indices = cv2.dnn.NMSBoxes(pixel_boxes, confidences, 0.0, 0.45)
             
             detections_list = []
             if len(indices) > 0:

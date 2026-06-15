@@ -56,7 +56,7 @@ def test_onnx_model_inference_latency():
     
     # Measure execution speed
     start_time = time.time()
-    detections = analyzer._run_onnx_inference(dummy_crop)
+    detections = analyzer._run_onnx_inference(dummy_crop, "left_cheek", 0.5)
     elapsed = (time.time() - start_time) * 1000  # in ms
     
     print(f"\nYOLOv8 ONNX Inference latency: {elapsed:.2f}ms")
