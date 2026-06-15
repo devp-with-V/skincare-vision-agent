@@ -63,3 +63,31 @@ def test_onnx_model_inference_latency():
     assert elapsed < 100.0, f"ONNX inference took {elapsed:.2f}ms, which is above the 100ms threshold!"
     assert isinstance(detections, list)
 
+def test_skin_agent_mock_generator():
+    from app.agent.skin_agent import SkinAgent
+    agent = SkinAgent()
+    
+    dummy_regions_data = {
+        "forehead": {"severity_score": 0.15, "dominant_concern": "dryness_patch", "detections": []},
+        "left_cheek": {"severity_score": 0.35, "dominant_concern": "acne", "detections": []}
+    }
+    
+    res = agent._generate_mock_agent_response(0.25, dummy_regions_data)
+    assert res["condition_name"] == "Mild-to-Moderate Acne vulgaris"
+    assert res["dermatologist_flag"] is False
+    assert len(res["routine"]) > 0
+    assert len(res["lifestyle_tips"]) > 0
+
+def test_analyze_route():
+    # Call with a dummy base64 payload
+    payload = {
+        "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
+    }
+    response = client.post("/api/analyze", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "analysis" in data
+    assert data["analysis"]["face_detected"] is False  # Dummy image has no face
+    assert data["recommendations"] is None
+
+

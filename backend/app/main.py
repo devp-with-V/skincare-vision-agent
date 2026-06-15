@@ -11,6 +11,7 @@ from app.models.schemas import ScanRequest, ScanResponse, AnalysisResult, Landma
 from app.core.face_detector import FaceDetector
 from app.core.skin_analyzer import SkinAnalyzer
 from app.core.severity_scorer import calculate_overall_severity
+from app.agent.skin_agent import SkinAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,7 @@ app.add_middleware(
 # Initialize Core Engines
 face_detector = FaceDetector()
 skin_analyzer = SkinAnalyzer()
+skin_agent = SkinAgent()
 
 @app.get("/health")
 def health_check():
@@ -94,6 +96,58 @@ async def scan_image(request: ScanRequest):
         logger.exception("Error during rest api scan")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
+@app.post("/api/analyze", response_model=ScanResponse)
+async def analyze_image(request: ScanRequest):
+    logger.info("Received analyze request via REST API")
+    try:
+        # 1. Decode image
+        img_bytes_base64 = decode_base64_image(request.image_base64)
+        image_bytes = base64.b64decode(img_bytes_base64)
+
+        # 2. Process face detection
+        face_detected, landmarks, regions = face_detector.process_frame(image_bytes)
+        
+        landmark_schemas = [
+            LandmarkPoint(x=lm["x"], y=lm["y"], z=lm["z"]) for lm in landmarks
+        ]
+
+        if not face_detected:
+            return ScanResponse(
+                analysis=AnalysisResult(
+                    face_detected=False,
+                    landmarks=[],
+                    regions={},
+                    overall_severity=0.0
+                ),
+                recommendations=None
+            )
+
+        # 3. Analyze cropped skin regions
+        region_analyses = skin_analyzer.analyze_regions(regions)
+
+        # 4. Calculate overall severity
+        overall_severity = calculate_overall_severity(region_analyses)
+
+        # 5. Generate LLM recommendations
+        regions_serialized = {
+            k: v.model_dump() for k, v in region_analyses.items()
+        }
+        recommendations = await skin_agent.generate_analysis(overall_severity, regions_serialized)
+
+        return ScanResponse(
+            analysis=AnalysisResult(
+                face_detected=True,
+                landmarks=landmark_schemas,
+                regions=region_analyses,
+                overall_severity=overall_severity
+            ),
+            recommendations=recommendations
+        )
+
+    except Exception as e:
+        logger.exception("Error during rest api analyze")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
 @app.websocket("/api/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -138,17 +192,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     continue
 
-                # Quick analysis for real-time overlay
-                region_analyses = skin_analyzer.analyze_regions(regions)
-                overall_severity = calculate_overall_severity(region_analyses)
+                # Real-time WebSocket only needs face tracking landmarks.
+                # Heavy skin condition YOLO ONNX inference is deferred to the "Capture & Analyze" REST endpoint
+                # to guarantee 30+ FPS live tracking.
+                regions_serialized = {}
+                overall_severity = 0.0
                 elapsed = (time.time() - start_time) * 1000
                 logger.info(f"Frame processed: Face detected. Latency: {elapsed:.1f}ms (Overall Severity: {overall_severity * 100}%)")
-
-                # Send back the results
-                # Convert region_analyses schemas to dicts
-                regions_serialized = {
-                    k: v.model_dump() for k, v in region_analyses.items()
-                }
 
                 await websocket.send_json({
                     "face_detected": True,
