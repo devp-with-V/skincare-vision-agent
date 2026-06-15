@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import logging
+import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -124,9 +125,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Process frame using MediaPipe + CV
             try:
+                start_time = time.time()
                 face_detected, landmarks, regions = face_detector.process_frame(image_bytes)
                 
                 if not face_detected:
+                    elapsed = (time.time() - start_time) * 1000
+                    logger.info(f"Frame processed: No face detected. Latency: {elapsed:.1f}ms")
                     await websocket.send_json({
                         "face_detected": False,
                         "landmarks": [],
@@ -137,6 +141,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Quick analysis for real-time overlay
                 region_analyses = skin_analyzer.analyze_regions(regions)
                 overall_severity = calculate_overall_severity(region_analyses)
+                elapsed = (time.time() - start_time) * 1000
+                logger.info(f"Frame processed: Face detected. Latency: {elapsed:.1f}ms (Overall Severity: {overall_severity * 100}%)")
 
                 # Send back the results
                 # Convert region_analyses schemas to dicts
