@@ -7,11 +7,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
-from app.models.schemas import ScanRequest, ScanResponse, AnalysisResult, LandmarkPoint
+from app.models.schemas import ScanRequest, ScanResponse, AnalysisResult, LandmarkPoint, RegionAnalysis, Detection
 from app.core.face_detector import FaceDetector
 from app.core.skin_analyzer import SkinAnalyzer
 from app.core.severity_scorer import calculate_overall_severity
 from app.agent.skin_agent import SkinAgent
+from app.agent.vlm_agent import VLMAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +37,7 @@ app.add_middleware(
 face_detector = FaceDetector()
 skin_analyzer = SkinAnalyzer()
 skin_agent = SkinAgent()
+vlm_agent = VLMAgent()
 
 @app.get("/health")
 def health_check():
@@ -146,6 +148,80 @@ async def analyze_image(request: ScanRequest):
 
     except Exception as e:
         logger.exception("Error during rest api analyze")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+@app.post("/api/analyze-vlm", response_model=ScanResponse)
+async def analyze_image_vlm(request: ScanRequest):
+    logger.info("Received VLM analyze request via REST API")
+    try:
+        # 1. Decode image to raw bytes for local face landmarks
+        img_bytes_base64 = decode_base64_image(request.image_base64)
+        image_bytes = base64.b64decode(img_bytes_base64)
+
+        # 2. Process face landmarks
+        face_detected, landmarks, _ = face_detector.process_frame(image_bytes)
+        
+        landmark_schemas = [
+            LandmarkPoint(x=lm["x"], y=lm["y"], z=lm["z"]) for lm in landmarks
+        ]
+
+        if not face_detected:
+            return ScanResponse(
+                analysis=AnalysisResult(
+                    face_detected=False,
+                    landmarks=[],
+                    regions={},
+                    overall_severity=0.0
+                ),
+                recommendations=None
+            )
+
+        # 3. Call VLM agent to get structured JSON analysis and routine recommendation
+        vlm_data = await vlm_agent.analyze_image(request.image_base64)
+
+        # 4. Parse the VLM's structured regions and overall severity
+        vlm_regions = {}
+        for r_name, r_data in vlm_data.get("regions", {}).items():
+            detections = []
+            for det in r_data.get("detections", []):
+                detections.append(Detection(
+                    class_name=det.get("class_name", "acne"),
+                    confidence=det.get("confidence", 0.8),
+                    bbox=det.get("bbox", [0.0, 0.0, 1.0, 1.0])
+                ))
+            vlm_regions[r_name] = RegionAnalysis(
+                region=r_name,
+                severity_score=r_data.get("severity_score", 0.0),
+                dominant_concern=r_data.get("dominant_concern"),
+                detections=detections
+            )
+
+        overall_severity = vlm_data.get("overall_severity", 0.0)
+
+        # 5. Extract structured recommendations schema
+        recommendations = {
+            "condition_name": vlm_data.get("condition_name", "Mild Skin Concern"),
+            "condition_desc": vlm_data.get("condition_desc", ""),
+            "overall_summary": vlm_data.get("overall_summary", ""),
+            "dermatologist_flag": vlm_data.get("dermatologist_flag", False),
+            "dermatologist_reason": vlm_data.get("dermatologist_reason"),
+            "disclaimer": vlm_data.get("disclaimer", ""),
+            "routine": vlm_data.get("routine", []),
+            "lifestyle_tips": vlm_data.get("lifestyle_tips", [])
+        }
+
+        return ScanResponse(
+            analysis=AnalysisResult(
+                face_detected=True,
+                landmarks=landmark_schemas,
+                regions=vlm_regions,
+                overall_severity=overall_severity
+            ),
+            recommendations=recommendations
+        )
+
+    except Exception as e:
+        logger.exception("Error during VLM scan")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @app.websocket("/api/ws")

@@ -7,7 +7,7 @@ import FaceMeshOverlay from '../../components/FaceMeshOverlay';
 import SeverityGauge from '../../components/SeverityGauge';
 import RegionBreakdown from '../../components/RegionBreakdown';
 import AnalysisReport, { SkincareRecommendations } from '../../components/AnalysisReport';
-import { SkinWebSocketClient, scanImage, AnalysisResult } from '../../lib/api';
+import { SkinWebSocketClient, scanImage, scanImageVLM, AnalysisResult } from '../../lib/api';
 
 const WEBCAM_WIDTH = 640;
 const WEBCAM_HEIGHT = 480;
@@ -37,6 +37,9 @@ export default function ScanPage() {
 
   // Recommendations state
   const [recommendations, setRecommendations] = useState<SkincareRecommendations | null>(null);
+
+  // VLM Toggle State
+  const [isVlmMode, setIsVlmMode] = useState(false);
 
   // WebSocket frame sending loop
   useEffect(() => {
@@ -124,7 +127,7 @@ export default function ScanPage() {
     }, 100);
 
     try {
-      const response = await scanImage(imageSrc);
+      const response = isVlmMode ? await scanImageVLM(imageSrc) : await scanImage(imageSrc);
       clearInterval(interval);
       setScanProgress(100);
       
@@ -155,6 +158,19 @@ export default function ScanPage() {
           <p className="text-slate-400 text-sm mt-1">Real-time face mesh analysis & skin condition detection</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* VLM Mode Toggle Switch */}
+          <button
+            onClick={() => setIsVlmMode(!isVlmMode)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+              isVlmMode
+                ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 shadow-md shadow-indigo-900/15'
+                : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>VLM Agent: {isVlmMode ? 'ON' : 'OFF'}</span>
+          </button>
+
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
             isWsConnected 
               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 

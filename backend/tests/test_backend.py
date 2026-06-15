@@ -136,5 +136,59 @@ async def test_skin_agent_claude_api_parsing():
     # Cleanup environment
     del os.environ["ANTHROPIC_API_KEY"]
 
+def test_vlm_agent_mock_generator():
+    from app.agent.vlm_agent import VLMAgent
+    agent = VLMAgent()
+    res = agent._generate_mock_vlm_response()
+    assert res["condition_name"] == "Mild Acne & Dehydrated Forehead (VLM Cloud Agent)"
+    assert res["overall_severity"] == 0.28
+    assert "forehead" in res["regions"]
+    assert len(res["routine"]) > 0
+
+@pytest.mark.anyio
+async def test_vlm_agent_openrouter_parsing():
+    from app.agent.vlm_agent import VLMAgent
+    from unittest.mock import AsyncMock
+    import os
+    
+    os.environ["OPENROUTER_API_KEY"] = "fake_openrouter_key"
+    agent = VLMAgent()
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json = lambda: {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"condition_name": "VLM Test", "overall_severity": 0.4, "regions": {}}'
+                }
+            }
+        ]
+    }
+    
+    import httpx
+    # Mock httpx.AsyncClient.post
+    original_post = httpx.AsyncClient.post
+    httpx.AsyncClient.post = AsyncMock(return_value=mock_response)
+    
+    try:
+        res = await agent.analyze_image("dummy_image")
+        assert res["condition_name"] == "VLM Test"
+        assert res["overall_severity"] == 0.4
+    finally:
+        httpx.AsyncClient.post = original_post
+        del os.environ["OPENROUTER_API_KEY"]
+
+def test_analyze_vlm_route():
+    payload = {
+        "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
+    }
+    response = client.post("/api/analyze-vlm", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "analysis" in data
+    assert data["analysis"]["face_detected"] is False  # Dummy has no face
+    assert data["recommendations"] is None
+
 
 

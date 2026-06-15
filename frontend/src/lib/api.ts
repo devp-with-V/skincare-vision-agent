@@ -73,6 +73,26 @@ export async function scanImage(base64Image: string, userId?: string): Promise<S
   return response.json();
 }
 
+export async function scanImageVLM(base64Image: string, userId?: string): Promise<ScanResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/analyze-vlm`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      image_base64: base64Image,
+      user_id: userId || null,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to scan image via VLM: ${errText || response.statusText}`);
+  }
+
+  return response.json();
+}
+
 export class SkinWebSocketClient {
   private ws: WebSocket | null = null;
   private url: string;
