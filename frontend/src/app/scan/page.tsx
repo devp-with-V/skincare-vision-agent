@@ -69,18 +69,38 @@ export default function ScanPage() {
           return;
         }
 
-        // Apply moving average temporal filter over 5 frames
-        const rawSeverity = data.overall_severity || 0;
-        const history = [...severityHistoryRef.current, rawSeverity].slice(-5);
-        severityHistoryRef.current = history;
-        const smoothedSeverity = history.reduce((sum, val) => sum + val, 0) / history.length;
+        if (data.type === 'landmarks') {
+          setAnalysis((prev) => ({
+            ...prev,
+            face_detected: data.face_detected,
+            landmarks: data.landmarks || []
+          }));
+        } else if (data.type === 'blemishes') {
+          // Apply moving average temporal filter over 5 frames
+          const rawSeverity = data.overall_severity || 0;
+          const history = [...severityHistoryRef.current, rawSeverity].slice(-5);
+          severityHistoryRef.current = history;
+          const smoothedSeverity = history.reduce((sum, val) => sum + val, 0) / history.length;
 
-        setAnalysis({
-          face_detected: data.face_detected,
-          landmarks: data.landmarks || [],
-          regions: data.regions || {},
-          overall_severity: smoothedSeverity
-        });
+          setAnalysis((prev) => ({
+            ...prev,
+            regions: data.regions || {},
+            overall_severity: smoothedSeverity
+          }));
+        } else {
+          // Fallback if message type is not specified
+          const rawSeverity = data.overall_severity || 0;
+          const history = [...severityHistoryRef.current, rawSeverity].slice(-5);
+          severityHistoryRef.current = history;
+          const smoothedSeverity = history.reduce((sum, val) => sum + val, 0) / history.length;
+
+          setAnalysis({
+            face_detected: data.face_detected !== undefined ? data.face_detected : true,
+            landmarks: data.landmarks || [],
+            regions: data.regions || {},
+            overall_severity: smoothedSeverity
+          });
+        }
         setErrorMsg(null);
       },
       {

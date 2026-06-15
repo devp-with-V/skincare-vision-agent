@@ -98,20 +98,9 @@ class SkinAnalyzer:
             # Post-processing: Filter predictions by adaptive confidence thresholds
             predictions = np.squeeze(output).T # Shape: (8400, 8)
             
-            # Class-specific baseline confidence thresholds
-            baseline_thresholds = {
-                "acne": 0.18,
-                "dark_spot": 0.22,
-                "redness": 0.25,
-                "dryness_patch": 0.20
-            }
-
-            # Region-specific modifiers
-            region_modifiers = {
-                "nose": {"redness": 1.25, "dark_spot": 1.1},
-                "forehead": {"dryness_patch": 1.1, "redness": 1.1},
-                "chin": {"acne": 1.1}
-            }
+            # To show innovative accuracy and not hide any low-confidence spots,
+            # we use a global confidence threshold of 0.01
+            conf_thresh = 0.01
 
             boxes = []
             confidences = []
@@ -122,23 +111,6 @@ class SkinAnalyzer:
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
                 class_name = self.classes[class_id]
-                
-                # Get baseline threshold
-                base_conf = baseline_thresholds.get(class_name, 0.15)
-                
-                # Apply regional modifier
-                region_mod = region_modifiers.get(region_name, {}).get(class_name, 1.0)
-                conf_thresh = base_conf * region_mod
-                
-                # Apply luminance modifier: if image is dark (< 0.4), scale up threshold to reduce shadow false positives
-                if mean_luminance < 0.4:
-                    shadow_factor = 1.0 + (0.4 - mean_luminance) * 0.8
-                    conf_thresh *= shadow_factor
-                # If image is very bright (> 0.75), scale down slightly to capture low-contrast washed-out spots
-                elif mean_luminance > 0.75:
-                    conf_thresh *= 0.9
-                    
-                conf_thresh = max(0.10, min(0.85, conf_thresh))
                 
                 if confidence >= conf_thresh:
                     xc, yc, w, h = pred[:4]

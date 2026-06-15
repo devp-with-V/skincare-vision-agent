@@ -137,4 +137,20 @@ async def test_skin_agent_claude_api_parsing():
     del os.environ["ANTHROPIC_API_KEY"]
 
 
+def test_websocket_endpoint_decoupled():
+    # Send a dummy base64 frame (no face)
+    payload = {
+        "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
+    }
+    with client.websocket_connect("/api/ws") as websocket:
+        websocket.send_json(payload)
+        
+        # We expect immediate landmarks response
+        msg = websocket.receive_json()
+        assert "type" in msg
+        assert msg["type"] == "landmarks"
+        assert msg["face_detected"] is False
+        assert msg["landmarks"] == []
+
+
 

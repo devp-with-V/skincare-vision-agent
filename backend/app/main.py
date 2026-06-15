@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import time
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -153,6 +154,30 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket connection established")
     
+    ws_write_lock = asyncio.Lock()
+    active_analysis_task = None
+
+    async def run_blemish_analysis(regions_to_analyze):
+        try:
+            loop = asyncio.get_running_loop()
+            region_analyses = await loop.run_in_executor(
+                None, skin_analyzer.analyze_regions, regions_to_analyze
+            )
+            overall_severity = calculate_overall_severity(region_analyses)
+            regions_serialized = {
+                k: v.model_dump() for k, v in region_analyses.items()
+            }
+            async with ws_write_lock:
+                await websocket.send_json({
+                    "type": "blemishes",
+                    "regions": regions_serialized,
+                    "overall_severity": overall_severity
+                })
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.exception("Error in background blemish analysis task:")
+
     try:
         while True:
             # Expect either Text (JSON base64) or Binary message (raw bytes)
@@ -170,11 +195,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         image_bytes = base64.b64decode(img_bytes_base64)
                 except Exception as e:
                     logger.error(f"WebSocket text parse error: {str(e)}")
-                    await websocket.send_json({"error": "Invalid JSON format or base64 image"})
+                    async with ws_write_lock:
+                        await websocket.send_json({"error": "Invalid JSON format or base64 image"})
                     continue
 
             if image_bytes is None:
-                await websocket.send_json({"error": "No image data received"})
+                async with ws_write_lock:
+                    await websocket.send_json({"error": "No image data received"})
                 continue
 
             # Process frame using MediaPipe + CV
@@ -182,35 +209,33 @@ async def websocket_endpoint(websocket: WebSocket):
                 start_time = time.time()
                 face_detected, landmarks, regions = face_detector.process_frame(image_bytes)
                 
-                if not face_detected:
-                    elapsed = (time.time() - start_time) * 1000
-                    logger.info(f"Frame processed: No face detected. Latency: {elapsed:.1f}ms")
+                # Send face mesh landmarks immediately to guarantee 30+ FPS live tracking
+                async with ws_write_lock:
                     await websocket.send_json({
-                        "face_detected": False,
-                        "landmarks": [],
-                        "regions": {}
+                        "type": "landmarks",
+                        "face_detected": face_detected,
+                        "landmarks": landmarks if face_detected else []
                     })
-                    continue
 
-                # Real-time WebSocket only needs face tracking landmarks.
-                # Heavy skin condition YOLO ONNX inference is deferred to the "Capture & Analyze" REST endpoint
-                # to guarantee 30+ FPS live tracking.
-                regions_serialized = {}
-                overall_severity = 0.0
+                # If face is detected, trigger blemish detection asynchronously in a background task
+                if face_detected and regions:
+                    if active_analysis_task is None or active_analysis_task.done():
+                        active_analysis_task = asyncio.create_task(
+                            run_blemish_analysis(regions)
+                        )
+                    # If active_analysis_task is still running, skip analysis of this frame (backpressure handling)
+
                 elapsed = (time.time() - start_time) * 1000
-                logger.info(f"Frame processed: Face detected. Latency: {elapsed:.1f}ms (Overall Severity: {overall_severity * 100}%)")
-
-                await websocket.send_json({
-                    "face_detected": True,
-                    "landmarks": landmarks,  # Already list of dicts from detector
-                    "regions": regions_serialized,
-                    "overall_severity": overall_severity
-                })
+                if not face_detected:
+                    logger.info(f"Frame processed: No face detected. Latency: {elapsed:.1f}ms")
+                else:
+                    logger.info(f"Frame processed: Face landmarks tracked. Latency: {elapsed:.1f}ms")
 
             except Exception as e:
                 logger.exception("WebSocket frame processing error during streaming:")
                 try:
-                    await websocket.send_json({"error": f"Error processing frame: {str(e)}"})
+                    async with ws_write_lock:
+                        await websocket.send_json({"error": f"Error processing frame: {str(e)}"})
                 except Exception:
                     pass
 
@@ -219,6 +244,8 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket exception: {str(e)}")
     finally:
+        if active_analysis_task and not active_analysis_task.done():
+            active_analysis_task.cancel()
         try:
             await websocket.close()
         except Exception:
