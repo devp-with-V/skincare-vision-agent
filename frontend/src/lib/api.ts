@@ -30,8 +30,25 @@ export interface ScanResponse {
   recommendations: any | null;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+// Dynamically resolve backend URLs based on the browser's current hostname.
+// This allows local network devices (like mobile phones) to connect to the backend server automatically.
+const getBackendUrls = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    return {
+      api: `http://${hostname}:8000`,
+      ws: `ws://${hostname}:8000`
+    };
+  }
+  return {
+    api: 'http://localhost:8000',
+    ws: 'ws://localhost:8000'
+  };
+};
+
+const urls = getBackendUrls();
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || urls.api;
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || urls.ws;
 
 export async function scanImage(base64Image: string, userId?: string): Promise<ScanResponse> {
   const response = await fetch(`${API_BASE_URL}/api/scan`, {

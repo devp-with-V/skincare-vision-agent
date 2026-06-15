@@ -21,6 +21,15 @@ const REGION_INDICES: Record<string, number[]> = {
   chin: [152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 58, 172, 136, 150, 149, 176, 148, 18, 200, 199]
 };
 
+// Helper to convert normalized landmarks to pixel space (applying horizontal mirroring)
+const getPixelLandmarks = (landmarks: LandmarkPoint[], width: number, height: number) => {
+  return landmarks.map(lm => ({
+    x: (1.0 - lm.x) * width,  // Mirror X axis to match mirrored webcam scale-x-[-1]
+    y: lm.y * height,
+    z: lm.z
+  }));
+};
+
 export default function FaceMeshOverlay({
   landmarks,
   regions,
@@ -42,6 +51,9 @@ export default function FaceMeshOverlay({
     ctx.clearRect(0, 0, width, height);
 
     if (!landmarks || landmarks.length === 0) return;
+
+    // Pre-calculate pixel landmarks
+    const pixelLandmarks = getPixelLandmarks(landmarks, width, height);
 
     // Helper to get region color based on severity
     const getRegionColors = (regionName: string, isHovered: boolean) => {
@@ -67,11 +79,11 @@ export default function FaceMeshOverlay({
     ctx.lineWidth = 0.5;
     
     // Draw simplified grid connections between points to look like a mesh
-    for (let i = 0; i < landmarks.length; i += 4) {
-      if (i + 4 < landmarks.length) {
+    for (let i = 0; i < pixelLandmarks.length; i += 4) {
+      if (i + 4 < pixelLandmarks.length) {
         ctx.beginPath();
-        ctx.moveTo(landmarks[i].x * width, landmarks[i].y * height);
-        ctx.lineTo(landmarks[i+4].x * width, landmarks[i+4].y * height);
+        ctx.moveTo(pixelLandmarks[i].x, pixelLandmarks[i].y);
+        ctx.lineTo(pixelLandmarks[i+4].x, pixelLandmarks[i+4].y);
         ctx.stroke();
       }
     }
@@ -79,9 +91,9 @@ export default function FaceMeshOverlay({
     // 2. Draw skin region overlays
     Object.entries(REGION_INDICES).forEach(([regionName, indices]) => {
       const pts = indices
-        .map(idx => landmarks[idx])
+        .map(idx => pixelLandmarks[idx])
         .filter(Boolean)
-        .map(lm => ({ x: lm.x * width, y: lm.y * height }));
+        .map(lm => ({ x: lm.x, y: lm.y }));
 
       if (pts.length < 3) return;
 
@@ -135,9 +147,9 @@ export default function FaceMeshOverlay({
       if (!indices || !analysis.detections.length) return;
 
       // Find bounding box limits of this region in canvas coordinates
-      const regionLandmarks = indices.map(idx => landmarks[idx]).filter(Boolean);
-      const xs = regionLandmarks.map(lm => lm.x * width);
-      const ys = regionLandmarks.map(lm => lm.y * height);
+      const regionLandmarks = indices.map(idx => pixelLandmarks[idx]).filter(Boolean);
+      const xs = regionLandmarks.map(lm => lm.x);
+      const ys = regionLandmarks.map(lm => lm.y);
       
       const regionMinX = Math.min(...xs);
       const regionMaxX = Math.max(...xs);
@@ -151,10 +163,16 @@ export default function FaceMeshOverlay({
         // Map region relative bbox back to canvas
         const [dxMin, dyMin, dxMax, dyMax] = det.bbox;
         
-        const boxX = regionMinX + dxMin * regionW;
+        let boxX = regionMinX + dxMin * regionW;
         const boxY = regionMinY + dyMin * regionH;
         const boxW = (dxMax - dxMin) * regionW;
         const boxH = (dyMax - dyMin) * regionH;
+
+        // Since the region image inside the backend is cropped from the UNMIRRORED frame,
+        // and we are drawing on a MIRRORED canvas, we also need to mirror the horizontal 
+        // offset of the bounding boxes *inside* the region bounds!
+        // Mirroring inside region box: boxX_mirrored = regionMaxX - (boxX - regionMinX) - boxW
+        boxX = regionMaxX - (boxX - regionMinX) - boxW;
 
         // Draw bbox
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)'; // Crimson detection box
@@ -182,15 +200,12 @@ export default function FaceMeshOverlay({
     });
 
     // 4. Draw face landmarks as points (foreground)
-    landmarks.forEach((lm, index) => {
+    pixelLandmarks.forEach((lm, index) => {
       // Don't draw all 468 to prevent visual clutter; draw a subset
       if (index % 3 !== 0) return;
 
-      const px = lm.x * width;
-      const py = lm.y * height;
-
       ctx.beginPath();
-      ctx.arc(px, py, 1.2, 0, 2 * Math.PI);
+      ctx.arc(lm.x, lm.y, 1.2, 0, 2 * Math.PI);
       ctx.fillStyle = 'rgba(6, 182, 212, 0.7)'; // Cyan
       ctx.fill();
     });
@@ -208,14 +223,16 @@ export default function FaceMeshOverlay({
 
     let hoveredRegion: string | null = null;
 
+    const pixelLandmarks = getPixelLandmarks(landmarks, width, height);
+
     // Check collision for each region polygon
     const entries = Object.entries(REGION_INDICES);
     for (let i = 0; i < entries.length; i++) {
       const [regionName, indices] = entries[i];
       const pts = indices
-        .map(idx => landmarks[idx])
+        .map(idx => pixelLandmarks[idx])
         .filter(Boolean)
-        .map(lm => ({ x: lm.x * width, y: lm.y * height }));
+        .map(lm => ({ x: lm.x, y: lm.y }));
 
       if (pts.length < 3) continue;
 
