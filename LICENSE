@@ -1,0 +1,35 @@
+Copyright (c) 2026 devp-with-V. All Rights Reserved.
+
+CUSTOM RESTRICTIVE LICENSE
+
+Permission is hereby granted to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to view and study the
+source code for personal, educational, and non-commercial purposes only,
+subject to the following conditions:
+
+1. NO COMMERCIAL USE — The Software, or any portion thereof, may NOT be used
+   for commercial purposes, including but not limited to selling, licensing,
+   offering as a paid service, or incorporating into a commercial product.
+
+2. NO REDISTRIBUTION — You may NOT redistribute, publish, or share copies of
+   the Software, modified or unmodified, without express written permission
+   from the copyright holder.
+
+3. NO DERIVATIVE WORKS — You may NOT create derivative works, forks intended
+   for distribution, or modified versions of the Software for any purpose
+   other than personal learning.
+
+4. ATTRIBUTION — If you reference this project in academic papers, blog posts,
+   or presentations, you must provide proper attribution to the original
+   author and link to the original repository.
+
+5. MODEL WEIGHTS — Any trained model weights associated with this project are
+   subject to the same restrictions and may NOT be used, distributed, or
+   deployed independently without permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+For licensing inquiries, contact the author via GitHub:
+https://github.com/devp-with-V

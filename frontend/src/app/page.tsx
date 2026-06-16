@@ -52,7 +52,7 @@ export default function Home() {
               </Link>
               
               <Link
-                href="https://github.com"
+                href="https://github.com/devp-with-V/skincare-vision-agent"
                 target="_blank"
                 className="flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-100 font-semibold tracking-wide transition-all"
               >
