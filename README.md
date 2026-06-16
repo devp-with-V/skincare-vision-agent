@@ -23,6 +23,25 @@ SkinCare Vision Agent is a full-stack AI application that performs **real-time s
 
 ---
 
+## 📸 Screenshots
+
+### Landing Page
+<p align="center">
+  <img src="docs/screenshots/landing-page.png" alt="SkinCare Vision — Landing Page" width="800"/>
+</p>
+
+### Live Scan — Real-Time Face Mesh + Blemish Detection
+<p align="center">
+  <img src="docs/screenshots/live-scan.png" alt="Live Scanner with face mesh overlay and YOLOv8 blemish detection" width="800"/>
+</p>
+
+### Focused Analysis Report
+<p align="center">
+  <img src="docs/screenshots/analysis-report.png" alt="Focused skin analysis report with per-region severity breakdown" width="800"/>
+</p>
+
+---
+
 ## 🏗️ Architecture
 
 ```
